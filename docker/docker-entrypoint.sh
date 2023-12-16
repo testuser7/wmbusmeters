@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 [ ! -d /wmbusmeters_data/logs/meter_readings ] && mkdir -p /wmbusmeters_data/logs/meter_readings
 [ ! -d /wmbusmeters_data/etc/wmbusmeters.d ] && mkdir -p /wmbusmeters_data/etc/wmbusmeters.d

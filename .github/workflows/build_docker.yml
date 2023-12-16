@@ -3,20 +3,25 @@ name: Build docker
 on:
   push:
     branches:
-      - 'master'
+      - 'dev'
     tags:
       - '[0-9]+\.[0-9]+\.[0-9]+'
       - '[0-9]+\.[0-9]+\.[0-9]+-RC[0-9]+'
 
 env:
-  DOCKERHUB_IMAGE: ${{ github.repository }}
+  #HUB_IMAGE: testuser07/${{ github.event.repository.name }}
+  #GHCR_IMAGE: ghcr.io/${{ github.repository }}
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
   IMAGE_TAG: |
-    ${{ github.ref_type == 'tag' && (contains(github.ref_name, '-RC') &&
-      join('candidate-', github.ref_name) || join('release-', github.ref_name)) || 'latest' }}
+    ${{ github.ref_type == 'tag' && format('{0}-{1}', (contains(github.ref_name, '-RC') &&
+      'candidate' || 'release'), github.ref_name) || 'test' }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -41,16 +46,23 @@ jobs:
           tags: |
             ${{ env.IMAGE_TAG }}
           images: |
-            ${{ env.DOCKERHUB_IMAGE }}
+            ${{ env.IMAGE_NAME }}
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      -
-        name: Login to DockerHub
+      #- 
+      #  name: Login to Docker Hub
+      #  uses: docker/login-action@v3
+      #  with:
+      #    username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #    password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - 
+        name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PAT }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Build and push
         uses: docker/build-push-action@v5
@@ -60,7 +72,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           provenance: false
           outputs: |
-            type=image,name=${{ env.DOCKERHUB_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+            type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
       -
         name: Export digest
         run: |
@@ -78,6 +90,9 @@ jobs:
 
   merge:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     needs:
       - build
     steps:
@@ -99,20 +114,27 @@ jobs:
           tags: |
             ${{ env.IMAGE_TAG }}
           images: |
-            ${{ env.DOCKERHUB_IMAGE }}
-      -
-        name: Login to DockerHub
+            ${{ env.IMAGE_NAME }}
+      #- 
+      #  name: Login to Docker Hub
+      #  uses: docker/login-action@v3
+      #  with:
+      #    username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #    password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - 
+        name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PAT }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.DOCKERHUB_IMAGE }}@sha256:%s ' *)
+            $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
       -
         name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.DOCKERHUB_IMAGE }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}

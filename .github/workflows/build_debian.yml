@@ -1,6 +1,8 @@
 name: Build Debian package
 on:
   push:
+    branches:
+      - master
   pull_request:
 
 jobs:
